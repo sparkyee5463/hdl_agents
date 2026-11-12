@@ -1,18 +1,18 @@
 # Reference model, coverage — Skills
 
 Read for target=ref (writing or reviewing an IP's reference model and
-coverage). The testbench has NO checker rules: the checker compares the
-DUT with the two models and records each result in the scoreboard. Worked
+coverage). The testbench has NO checker-rule classes: the checker compares
+the DUT with the reference model, runs the doc timing checks, and records
+each result in the scoreboard. Worked
 example: `fw_ip/axi4s_buffer/axi4s_buffer_1_0/` (`model/axi4s_buffer_1_0_reference/`,
 `testbench/cocotb_testbench_axi4s_buffer_1_0_shared/`).
 
-Three models, three checks per IP:
+Two checks per IP, both from the design doc:
 
-| pair | how | proves |
+| check | how | proves |
 |---|---|---|
-| HDL vs reference | checker compares DUT transactions with the reference model's (spec order, spec tolerance) | RTL correct |
-| HDL vs twin | checker compares every DUT output pin with the twin, every cycle (exact) | twin == RTL (reusable) |
-| twin vs reference | the same tests on the twin: `tests/test_on_twin.py` (pytest, no simulator) | twin correct; reference sane |
+| HDL vs reference | checker compares DUT transactions with the reference model's (spec order, spec tolerance) | RTL computes the right values |
+| HDL vs doc timing | checker `check_<property>()` every cycle for protocol/flag sentences, plus latency and throughput measuring tests, from `<ip>_interface.py` `doc_timing()` | RTL meets the doc's timing |
 
 ---
 
@@ -20,11 +20,11 @@ Three models, three checks per IP:
 
 - **Rule:** the reference model and coverage are written from the
   design doc (interface, behaviour, numeric spec, reset policy) only. Do not
-  read the IP's `hdl/`, its twin (`model/<ip>_model/`), its old testbench
-  model, or synthesis results. Pipeline tables and register names are not
+  read the IP's `hdl/`, its testbench (except your own files), or synthesis
+  results. Pipeline tables and register names are not
   spec: do not model them.
-- **Anti-pattern:** axi4s_buffer_1_0's old testbench "reference" model
-  "mirrors the RTL read-issue condition" (committed-beat gate, capture FIFO
+- **Anti-pattern:** an axi4s_buffer_1_0 "reference" model that "mirrors
+  the RTL read-issue condition" (committed-beat gate, capture FIFO
   indices). A model that copies the implementation passes with the same
   bug as the RTL.
 - **Check:** grep the reference for RTL signal names (`r_*`, `s_*`, `C_*`).
@@ -34,8 +34,9 @@ Three models, three checks per IP:
 
 - **Rule:** predict the output transactions (values, order, count), not
   cycles. No pipeline delays, no cycle counters in the reference. Timing
-  claims of the spec (latency, throughput, flag timing) are the twin's
-  contract, checked every cycle by the HDL vs twin compare (#5).
+  claims of the spec (latency, throughput, flag timing) are numbers in
+  `<ip>_interface.py` `doc_timing(generics)`, checked by the testbench's
+  timing checks and measuring tests (#5).
 - The spec's own arithmetic IS modelled (rounding mode, saturation, word
   lengths, accumulator wrap) when the doc defines it; then compare exactly.
 
@@ -61,13 +62,15 @@ Three models, three checks per IP:
   doc section, and applied in the checker's compare. Never widen a tolerance to make a test pass.
 - Reuse `design_doc/verify_<ip>_math.py` numbers when it exists.
 
-## 5. No checker rules
+## 5. No checker-rule classes
 
-- **Rule:** the testbench has no per-cycle rule files. Every check is a
-  compare in the checker: DUT transactions vs the reference model, DUT pins
-  vs the twin every cycle. Protocol behaviour (TVALID hold, payload stable),
-  status flags, latency and throughput are covered by the twin compare; the
-  doc's numbers for them go into the twin (`twin_model_skills.md`).
+- **Rule:** the testbench has no rule files or rule classes. Every check is
+  a plain method of the checker: DUT transactions vs the reference model
+  (`compare_<group>()`), and one `check_<property>()` per doc protocol/flag
+  sentence (TVALID hold, payload stable while stalled, a flag's cycle),
+  citing the doc section. Latency and throughput are measuring tests. The
+  doc's numbers go in `<ip>_interface.py` `doc_timing(generics)`; no
+  bounded don't-cares or carve-outs.
 - **Anti-pattern:** axi4s_buffer_1_0 (2026-10-30..11-05): eight rule
   classes with bounded don't-cares and spec-gap carve-outs; the user found
   them noisy and asked for queues -> checker -> scoreboard only.
@@ -90,20 +93,17 @@ Three models, three checks per IP:
 
 - Default: compose child REFERENCE models (`load_reference("<child_ip>")`).
   Error budgets add.
-- Only when the parent spec requires bit-exact composition with the child:
-  use the child twin's transaction-level helper (`tone`, `process`), never its
-  cycle API.
-- Never this IP's own twin or HDL. A mismatch that traces into a child is a
+- Never this IP's own HDL. A mismatch that traces into a child is a
   finding against the child IP.
 
-## 9. Disagreement triage (the doc decides, not a vote)
+## 9. Disagreement triage (the doc decides)
 
-| HDL=ref | HDL=twin | twin=ref | likely |
-|---|---|---|---|
-| no | yes | no | twin copied an RTL bug, or reference wrong -> read the doc |
-| no | no | yes | RTL bug |
-| yes | no | no | twin bug |
-| no | no | no | spec ambiguous -> fix the doc first |
+| failing check | likely | next |
+|---|---|---|
+| HDL vs reference | RTL bug, or reference wrong | work the failing input by hand from the doc |
+| HDL vs doc timing | RTL timing bug, or a wrong `doc_timing()` number | cite the doc sentence/number |
+| both, everywhere | testbench wiring (driver timing, queue pairing) | check the testbench before blaming the RTL |
+| doc gives no answer | spec ambiguous | fix the doc first (spec gap -> user) |
 
 - Change the reference only with a cited doc section. "Fixed the model to
   agree" without a citation is an error. Example (2026-10-29): a quick NCO
@@ -116,16 +116,16 @@ Three models, three checks per IP:
   from the doc (inputs -> expected outputs, including a reset and a corner),
   so a wrong reference fails before it meets the RTL.
 
-## 11. A "latency-accurate model contract" belongs to the TWIN
+## 11. Latency belongs to the timing checks, not the reference
 
 - **Rule:** when a sim plan asks for a "bit- and latency-accurate model",
-  that is the twin's contract, checked every cycle by the HDL vs twin
-  compare. The reference stays transaction level.
+  the latency part is the doc's numbers in `doc_timing()`, checked by the
+  timing checks and latency tests. The reference stays transaction level.
 - **Anti-pattern:** a cycle-by-cycle prediction of the outputs on the
   reference side (a "spec cycle model"). Under backpressure the exact cycles
   depend on the implementation, so it fails on correct RTL or gets tuned to
   DUT traces. axi4s_buffer_1_0 pilot (2026-10-30): failed 126/126 runs while
-  every transaction compare and the lockstep were clean.
+  every transaction compare was clean.
 
 ## 12. Degenerate coverage bins for narrow fields
 
@@ -142,8 +142,8 @@ Three models, three checks per IP:
 - Rule: the reset-grace convention covers reset ASSERTION only. The model's
   output assumption on the release cycle (rst_n deasserting) — e.g. registered
   vs combinational S_TREADY — must be recorded as an explicit spec gap with
-  its doc rationale; the twin models that reading and the user decides the
-  gap.
+  its doc rationale; the timing checks use that reading and the user
+  decides the gap.
 - Anti-pattern: an unrecorded release-cycle assumption that contradicts the
   sim plan's formula evaluated literally — every reset-release test
   (te_002, er_002, reset-during campaigns) false-fails against an RTL that
@@ -154,7 +154,7 @@ Three models, three checks per IP:
 
 - **Rule:** when a reference/checker problem goes back to
   `verification_architect`, send the failing compare, the test, and the doc
-  sections in question. Do NOT send DUT or twin waveforms/traces, and never
+  sections in question. Do NOT send DUT waveforms/traces, and never
   ask it to "match the DUT". It fixes the reference from the doc or reports
   the doc as ambiguous (spec gap -> user).
 - **Anti-pattern:** axi4s_buffer_1_0 pilot (2026-10-30): the lead pasted
@@ -168,8 +168,8 @@ Three models, three checks per IP:
   occupancy > 0, S activity) — not by the previous-cycle value of a
   reset-gated output. A gated output (M_TVALID under a reset gate) is 0 in
   the pre-reset cycle of many legitimate reset-during-activity cases, so a
-  bin keyed on it is hit only by other backends (twin tests) and the DUT
-  never exercises that reset context.
+  bin keyed on it is never hit and the DUT never exercises that reset
+  context.
 - **Anti-pattern:** a `reset_during.m_valid` bin keyed on the previous
   cycle's gated M_TVALID — the DUT backpressure-reset test holds the capture
   non-empty (the state that matters for the reset-gate bug class) while the

@@ -29,7 +29,7 @@ Categories:
   - Python syntax/import/runtime setup issues in cocotb or testbench code
   - bad `dut` member access
   - coroutine misuse
-  - pytest/cocotb discovery failures or testbench Makefile/path wiring issues
+  - pytest/cocotb discovery failures or testbench `run_vcst.py`/path wiring issues
 - `LOGIC_MISMATCH`
   - scoreboard mismatch
   - assertion after simulation time advanced

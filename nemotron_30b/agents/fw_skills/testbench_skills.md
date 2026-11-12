@@ -4,8 +4,8 @@ A testbench is only useful if it can FAIL. Most weak testbenches pass with a
 broken DUT because they check too little, check against a copy of the RTL,
 or never reach the scenario named in the test.
 
-`hdl_reviewer` (target=tb or target=twin) does every item. `cocotb_tb_architect`
-writes to it. Twin-specific rules are in `twin_model_skills.md`.
+`hdl_reviewer` (target=tb) does every item. `cocotb_tb_architect` writes
+to it.
 
 ---
 
@@ -18,11 +18,10 @@ writes to it. Twin-specific rules are in `twin_model_skills.md`.
   nothing was expected).
 - **Anti-pattern:** a scoreboard that only raises on mismatch. If the DUT
   never asserts valid, zero compares happen and the test passes.
-- The guard must live INSIDE the shared harness, not only in per-suite
-  scoreboards: a shared lockstep result object (e.g. `LockstepResult.passed`
-  in `fw_py_tools.twin.cocotb_lockstep`) must require `cycles > 0` in
-  addition to no mismatches, so a test that passes an empty input list
-  cannot report pass. (nco_2_0, 2026-10-28)
+- The guard must live INSIDE every shared result object too, not only in
+  per-suite scoreboards: a shared pass/fail result must require
+  `compares > 0` in addition to no mismatches, so a test that passes an
+  empty input list cannot report pass. (nco_2_0, 2026-10-28)
 
 ## 2. No silent skips
 
@@ -47,9 +46,8 @@ writes to it. Twin-specific rules are in `twin_model_skills.md`.
 - **Rule:** The expected values come from the spec (design doc, math), not
   from re-coding the RTL's internal steps. In the `fw_py_tools.tb` flow they
   come from the reference model (`reference_model_skills.md`), written by
-  `verification_architect` from the doc only; the twin is checked by
-  lockstep and never feeds a scoreboard. A model that copies RTL stages
-  also copies RTL bugs, and lockstep then proves nothing.
+  `verification_architect` from the doc only. A model that copies RTL
+  stages also copies RTL bugs, and the compare then proves nothing.
 - Every IP needs at least one spec-level check that does not use the model:
   ideal math (numpy FFT, `cos(theta)`, exact integer sum), conservation
   (every beat in comes out once, in order), or a documented invariant.
@@ -142,7 +140,7 @@ writes to it. Twin-specific rules are in `twin_model_skills.md`.
 
 ## 10. Build files list the matrix
 
-- `run_vcst.py` (or Makefile) has one named generic set per matrix row from
+- `run_vcst.py` has one named generic set per matrix row from
   item 6, and the generic set name says what it covers
   (`d5_nonpow2`, `regstat_true`). A generic that is in the RTL but never
   set in any configuration is a coverage gap.
@@ -158,9 +156,9 @@ writes to it. Twin-specific rules are in `twin_model_skills.md`.
 
 ## 12. Decode outputs exactly once
 
-- **Rule:** the twin documents whether each output is RAW (port bit
-  pattern) or DECODED. Tests compare raw to raw in lockstep, and decode once
-  (one helper) for spec-level math. nco_2_0 lost hours to tests decoding
+- **Rule:** the testbench documents whether each compared output is RAW
+  (port bit pattern) or DECODED. Compare raw to raw where the reference
+  gives raw values, and decode once (one helper) for spec-level math. nco_2_0 lost hours to tests decoding
   one's-complement outputs twice. (2026-10-28)
 
 ## 13. Mode-branch references must not compare a run to itself
@@ -181,8 +179,8 @@ writes to it. Twin-specific rules are in `twin_model_skills.md`.
 - **Rule:** the "long bursts and long idles" requirement needs a floor: at
   least one scenario (or a documented margin) idles for >= 4x the pipeline
   depth with data queued or recently drained, so free-running pipeline leaks
-  (spurious M_TVALID after drain) have a window to surface in an HDL run —
-  not only in a twin run. A uniform post-drain margin on every test (e.g.
+  (spurious M_TVALID after drain) have a window to surface in an HDL run.
+  A uniform post-drain margin on every test (e.g.
   50 cycles) can satisfy the margin clause if stated in the plan.
 - **Anti-pattern:** a stimulus mix whose maximum gap is a few cycles with no
   stated drain margin, where the only long-idle coverage is an incidental
@@ -213,7 +211,7 @@ writes to it. Twin-specific rules are in `twin_model_skills.md`.
 - **Rule:** for each integer generic: the doc minimum and minimum + 1, an
   odd value, the default, a power of two and that power of two + 1, and the
   doc maximum (no maximum in the doc: one value >= 64, so 32/64-bit
-  assumptions break). Keep every set an older `run_vcst.py` or plan lists.
+  assumptions break). Keep every set the simulation plan lists.
 - A set may not cost far more than the others: exhaustive stimulus or a
   table of 2^N entries only for N <= 16. (nco_1_0 Nemotron run, 2026-11-07:
   an added `G_ADDR_BITS = 32` set built a 2^32-entry table and ran out of
@@ -259,22 +257,20 @@ writes to it. Twin-specific rules are in `twin_model_skills.md`.
   (`from grey_encoder_1_0_interface import ...`), never relative
   (`from .grey_encoder_1_0_interface import ...`), and never a module that
   does not exist. Run `python -c "import <module>"` for every file you wrote.
-  (nco_1_0 Nemotron run: 6 of 9 new modules did not import, so the tests
-  still ran on the old files.)
+  (nco_1_0 Nemotron run: 6 of 9 new modules did not import.)
 
-## 21. Tests use the new files only
+## 21. Tests use the per-IP files only
 
-- **Rule:** new tests build `<Ip>_TbManager` and use the per-IP parts. They
-  never import the old `tb_manager.py`, `checker.py`, `model.py` or helpers
-  from old tests, even when those still exist. (nco_1_0 Nemotron run: old
-  tests edited by a dozen lines and left on the old testbench.)
+- **Rule:** tests build `<Ip>_TbManager` and use the per-IP parts. They
+  never import helpers from other IPs' testbenches. (nco_1_0 Nemotron run:
+  tests left on another testbench's helpers.)
 
 ## 22. Compare from the first defined sample, then every sample
 
 - **Rule:** before the first driven input (and, for clocked IPs, until the
-  startup reset has reached the DUT) the RTL's outputs are undefined and the
-  twin's are arbitrary. DUT-vs-twin and DUT-vs-reference compares start at
-  the first sample produced by a driven input (clocked: after the startup
-  reset). Every later sample is compared; never skip one to pass.
-  (nco_2_0, 2026-11-11: every table-only test failed at cycle 2 because the
-  twin compare began before the reset reached the RTL.)
+  startup reset has reached the DUT) the RTL's outputs are undefined.
+  Compares and timing checks start at the first sample produced by a driven
+  input (clocked: after the startup reset). Every later sample is checked;
+  never skip one to pass. (nco_2_0, 2026-11-11: every table-only test
+  failed at cycle 2 because the per-cycle compare began before the reset
+  reached the RTL.)

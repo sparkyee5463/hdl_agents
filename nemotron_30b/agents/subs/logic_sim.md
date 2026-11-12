@@ -31,15 +31,16 @@ Expected handoff from DebugLead:
 - rerun simulation command
 - first mismatch cycle and signal names from `@categorizer` when available
 
-Twin lockstep failures (`tc_twin_*` tests, see `fw_skills/twin_model_skills.md`):
+Reference-compare and doc-timing failures:
 - Rerun ONLY the failing test + generic set first, so the log is from it.
-- The log `fw_ip/<base>/<ip>/testbench/vcst/twin_lockstep_all_signals.jsonl` has one line per cycle with
-  `in`, `dut`, `exp` and `model` (register state BEFORE the edge). Read only
-  lines near the first mismatch: `sed -n '<c-3>,<c+2>p' <log>` (line = cycle+1).
-- Decide who is wrong using the design doc (latency register list, reset
-  list, rounding). Model wrong -> fix the twin `model.py`. RTL wrong -> fix RTL.
-- NEVER add tolerance, mask outputs, or change `LATENCY` to an observed value
-  without counting the RTL registers that justify it.
+- The checker prints the first mismatches (`cycle N: PORT dut=.. expected=..`).
+  `testbench/vcst/all_signals.jsonl` has one line per cycle; read only lines
+  near the first mismatch: `sed -n '<c-3>,<c+2>p' <log>` (line = cycle+1).
+- Decide who is wrong using the design doc (behaviour, latency, reset,
+  rounding). Reference wrong -> back to `verification_architect` with the doc
+  section. Testbench wiring wrong -> `cocotb_tb_architect`. RTL wrong -> RTL.
+- NEVER add tolerance, mask outputs, or change a `doc_timing()` number to an
+  observed value without the doc sentence that justifies it.
 
 Preferred tools (after `source tools/eda_env.sh`):
 - `fw-signal-window --log <log> --cycle <n> --before 2 --after 3`

@@ -56,9 +56,9 @@ Schema mapping:
 
 Syntax and compile-time debug routing:
 - Use `@hdl_syntax` for VHDL parse, analysis, elaboration, package ordering, entity/architecture binding, missing design unit, generic/port map, type conversion, width/type mismatch, library/use clause, and NVC compile-time failures rooted in HDL.
-- Use `@tb_syntax` for Python syntax, import/module resolution, cocotb API misuse, bad `dut` signal access, coroutine/await misuse, pytest/cocotb test discovery, Makefile/testbench path wiring, and runtime setup failures that occur before meaningful DUT/model comparison.
+- Use `@tb_syntax` for Python syntax, import/module resolution, cocotb API misuse, bad `dut` signal access, coroutine/await misuse, pytest/cocotb test discovery, vcst runner (`run_vcst.py`)/testbench path wiring, and runtime setup failures that occur before meaningful DUT/model comparison.
 - If the failing log contains both compile/setup errors and later stale mismatch text, choose the earliest causal failure, not the most visually prominent line.
-- If NVC reports `cannot find entity`, `no declaration`, `type mismatch`, `actual constraints`, `port not found`, or `unit not found`, prefer `@hdl_syntax` unless the path clearly points to testbench Python or Makefile setup.
+- If NVC reports `cannot find entity`, `no declaration`, `type mismatch`, `actual constraints`, `port not found`, or `unit not found`, prefer `@hdl_syntax` unless the path clearly points to testbench Python or `run_vcst.py` setup.
 - If Python reports `SyntaxError`, `ImportError`, `ModuleNotFoundError`, `AttributeError` on `dut.<signal>`, `TypeError` from cocotb scheduling, or an un-awaited coroutine warning tied to the testbench, prefer `@tb_syntax`.
 - Give syntax agents only the exact compile traceback/excerpt and the target file list from the packet. Do not send waveform logs or `all_signals.jsonl` to syntax agents.
 
@@ -69,7 +69,7 @@ General rules:
 - Prefer exact file paths and helper tools from the debug packet.
 - Start every shell with `source tools/eda_env.sh`; it puts `hdl_env/bin` (python, nvc, `fw-*` tools) on PATH.
 - Rerun one failing test with `fw-verify <ip_name> <test_name> <generic_set>`.
-- Never "fix" a mismatch by adding tolerance, masking outputs, or adding a latency offset in the testbench or twin model. Decide whether RTL or model is wrong from the design doc.
+- Never "fix" a mismatch by adding tolerance, masking outputs, or adding a latency offset in the testbench or reference model. Decide whether RTL or model is wrong from the design doc.
 - Do not use system `python`, `python3`, or another virtual environment for helper scripts, cocotb checks, or simulation reruns.
 - Never read the entire `all_signals.jsonl` file.
 - Do not commit, reset, stash, or modify git history.

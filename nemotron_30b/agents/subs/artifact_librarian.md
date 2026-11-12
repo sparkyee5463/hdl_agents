@@ -39,7 +39,6 @@ Recommended fields:
 - optimized variants
 - dependencies and reusable subblocks
 - failure/fix pattern summaries
-- `twin`: `{"package": "model/<ip_name>_model", "latency": N, "lockstep": "12/12 pass", "children": ["ip_name"]}`
 - simulation reports, next to `vivado_reports`/`vivado_summary` and the same
   way: `sim_reports` (paths from `testbench/vcst/reports/sim_summary.json`
   `reports`) and `sim_summary` (its `summary` line: tests, code coverage per

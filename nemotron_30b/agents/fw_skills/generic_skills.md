@@ -40,24 +40,24 @@ First used: `phase_shifter_1_0` review (2026-10-10).
 
 ---
 
-## 2. A boolean *mode* generic that adds datapath fabric needs conditional asserts on the OTHER generics, mirrored in the twin
+## 2. A boolean *mode* generic that adds datapath fabric needs conditional asserts on the OTHER generics, mirrored in the reference
 
 - **Rule:** When a boolean generic selects between datapaths and the `true`
   branch adds fabric (e.g. DSP48E2 multipliers) whose operand widths depend on
   OTHER generics, the top-level elaboration assert block MUST carry the
   conditional constraints that only apply when the mode is on (assert them as
   `mode = true => <width/legality condition>`, `severity failure`). The
-  digital-twin `validate()` MUST mirror the same conditional constraints so an
+  reference model's `Generics.validate()` MUST mirror the same conditional constraints so an
   illegal generic set is rejected at simulation setup, not mid-run.
 - **Anti-pattern:** a mode generic that is asserted only for its own type
   (boolean, so nothing to check) while the fabric it enables is left
-  unconstrained — the design elaborates and the twin runs, then the DSP
+  unconstrained — the design elaborates and the tests run, then the DSP
   operand silently overflows / the residue is too short for the correction to
   be defined. The constraint is "ad hoc" (in a comment only) instead of an
-  assert + twin rule.
+  assert + `validate()` rule.
 - **Check:** for each boolean mode generic, list the fabric its `true` branch
   adds and every other generic that sizes that fabric; verify each has a
-  conditional elaboration assert AND a matching twin `validate()` rule.
+  conditional elaboration assert AND a matching `validate()` rule.
 - **Example (found in `nco_2_0` design stage, 2026-10-27):**
   `G_TAYLOR_CORRECTION : boolean := true` adds 2 DSP48E2 whose A input is the
   table magnitude (`G_SINE_BITS-1` bits, must fit the 25-bit DSP A port) and
@@ -65,7 +65,7 @@ First used: `phase_shifter_1_0` review (2026-10-10).
   R = `G_PHASE_WIDTH - G_ADDR_BITS - 2` >= 2 bits. The constraints
   `G_TAYLOR_CORRECTION = true => G_PHASE_WIDTH >= G_ADDR_BITS + 4` and
   `= true => G_SINE_BITS <= 26` were specified ad hoc; they are now elaboration
-  asserts (design doc §2.4 rows 5–6) and twin `validate()` rules.
+  asserts (design doc §2.4 rows 5–6) and `validate()` rules.
 
 ---
 
@@ -73,9 +73,9 @@ First used: `phase_shifter_1_0` review (2026-10-10).
 
 - **Rule:** each value of each boolean/enum generic (and each optional
   register-stage generic, e.g. `G_REG_PHASE_INC`) has at least one named
-  generic set in `run_vcst.py`, with lockstep + latency tests passing. The
+  generic set in `run_vcst.py`, with the reference compare and latency tests passing. The
   simulation plan may not defer one without the user's written OK, recorded
   in `STATE.md`.
 - **Anti-pattern:** nco_2_0's plan deferred `G_REG_PHASE_INC=false` to a
-  "follow-up"; the twin reviewer flagged it and the lead accepted the
+  "follow-up"; the reviewer flagged it and the lead accepted the
   deferral, shipping an approved mode with zero simulation. (2026-10-28)

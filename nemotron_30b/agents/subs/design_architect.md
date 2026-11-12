@@ -47,7 +47,8 @@ Responsibilities:
   files it says apply; the design must satisfy them (they are what the
   reviewer checks).
 - List every legality constraint between generics; each becomes an
-  elaboration assert in the RTL and a check in the twin's `Generics.validate()`.
+  elaboration assert in the RTL and a check in the reference model's
+  `Generics.validate()`.
 
 Size and revisions:
 - Keep each document under ~20 KB: tables and short rules, no essays. The
@@ -100,17 +101,15 @@ AND list those registers by name in the pipeline table (e.g. `r_acc -> r_addr
 -> r_bram -> O_DATA` = 4). Use the convention `y[n] = f(x[n-L])`.
 
 Simulation plan sections:
-- Twin model contract (read `nemotron_30b/agents/fw_skills/twin_model_skills.md`):
-  package name `<ip_name>_model`; Inputs/Outputs fields (lower-case port
-  names, width, signed); `LATENCY` + register list; which registers reset and
-  which do not; power-on values; rounding/saturation per operation; child
-  twins it composes (same instance names as the RTL); one stream-level
-  helper for systems engineers (e.g. `tone(phase_inc, n)`, `process(samples)`).
+- Timing contract (what the testbench's timing checks measure): latency in
+  cycles per mode, throughput per mode, the cycle each flag/handshake output
+  changes relative to its cause, reset behaviour per output, power-on
+  values. Numbers only, each with its design-doc section.
 - Stimulus coverage.
-- Lockstep test (`tc_twin_*`) plus scenario tests.
-- Reset, edge, random, protocol, and throughput tests.
+- Scenario tests: reset, edge, random, protocol, latency and throughput.
 - Named generic sets for the vcst matrix.
-- Pass criteria: exact match on every output every cycle (no tolerance).
+- Pass criteria: exact match with the reference on every output transaction
+  (no tolerance unless the doc derives one), and every timing number met.
 
 Output format:
 ```json
@@ -126,7 +125,7 @@ Output format:
   "tradeoffs": ["option: numbers; chosen or rejected and why"],
   "mode_generic_sets": {"G_MODE=value": "generic set name"},
   "latency_registers": ["r_name"],
-  "child_twins": ["ip_name of each reused sub-IP"],
+  "child_ips": ["ip_name of each reused sub-IP"],
   "interfaces": ["short item"],
   "risks": ["short item"]
 }

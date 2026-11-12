@@ -10,7 +10,7 @@ Scope:
 - import/path issues
 - cocotb API misuse
 - bad `dut` member access
-- simple Makefile/testbench environment wiring issues
+- simple `run_vcst.py`/testbench environment wiring issues
 - pytest/cocotb test discovery problems
 - simulator setup failures caused by testbench configuration before meaningful DUT/model comparison begins
 
@@ -21,7 +21,7 @@ Preferred tools:
 
 Workflow:
 1. Read only the cited file(s) and the short traceback/error excerpt.
-2. Identify whether the failure is Python syntax, import/setup, cocotb scheduling/API, DUT signal access, or path/Makefile wiring.
+2. Identify whether the failure is Python syntax, import/setup, cocotb scheduling/API, DUT signal access, or path/`run_vcst.py` wiring.
 3. Fix the smallest issue needed to restore testbench execution.
 4. Verify with the helper script.
 5. Do not chase logic mismatches here.
@@ -30,17 +30,17 @@ Useful checks:
 - imports resolve
 - coroutine functions are awaited correctly
 - signal access uses cocotb APIs correctly
-- paths in Makefile/conftest are sane
+- paths in `run_vcst.py` are sane
 - test names and pytest marks match the failing test from the packet
 - `dut.<signal>` names match the wrapper/entity ports when the failure is an `AttributeError`
-- environment variables, module names, and Makefile paths point to the shared testbench package
+- environment variables, module names, and `run_vcst.py` paths point to the shared testbench package
 
 Common testbench compile/setup patterns:
 - `SyntaxError`: fix only the local Python syntax issue and run the checker.
 - `ImportError` / `ModuleNotFoundError`: repair package-relative imports, testbench path setup, or missing `__init__.py` when local evidence supports it.
 - `AttributeError` on `dut.<signal>`: compare the wrapper/entity port list with the testbench signal access and fix the smallest naming mismatch.
 - coroutine warnings or `TypeError` from cocotb scheduling: ensure cocotb triggers are awaited and tasks are started with the local project's existing pattern.
-- pytest cannot find the test: inspect the failing test path/name from the packet, then repair test discovery or Makefile module naming.
+- pytest cannot find the test: inspect the failing test path/name from the packet, then repair test discovery or the `tb_cocotb.py` imports.
 
 Rules:
 - Do not edit RTL behavior to satisfy a Python traceback.

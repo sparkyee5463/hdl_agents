@@ -144,7 +144,7 @@
       "steps": 120
     },
     "hdl_reviewer": {
-      "description": "Reviews RTL (target=rtl), testbench (target=tb), twin (target=twin) or spec reference model/checkers/coverage (target=ref) against the fw_skills checklists; writes only its reviews/<target>_worksheet.md and returns JSON findings.",
+      "description": "Reviews RTL (target=rtl), testbench (target=tb) or spec reference model/checkers/coverage (target=ref) against the fw_skills checklists; writes only its reviews/<target>_worksheet.md and returns JSON findings.",
       "mode": "subagent",
       "model": "llamacpp/nemotron-30b",
       "prompt": "{file:../agents/NEMOTRON_NOTES.md}\n\n{file:../agents/subs/hdl_reviewer.md}",
@@ -165,7 +165,7 @@
       "steps": 120
     },
     "cocotb_tb_architect": {
-      "description": "Builds the bit/cycle-accurate digital twin and the UVM-style testbench (drivers, stimulus, TestbenchManager, tests) on top of the verification architect's reference model.",
+      "description": "Builds the UVM-style cocotb testbench (drivers, stimulus, checker, TestbenchManager, tests) on top of the verification architect's reference model, checking the RTL against the reference and the design doc's timing.",
       "mode": "subagent",
       "model": "llamacpp/nemotron-30b",
       "prompt": "{file:../agents/NEMOTRON_NOTES.md}\n\n{file:../agents/subs/cocotb_tb_architect.md}",
@@ -210,7 +210,6 @@
           "*git restore*": "deny",
           "*ref_checks.py*": "deny",
           "*python -m pytest -q tests/test_reference.py*": "allow",
-          "*python -m pytest -q tests/test_on_twin.py*": "allow",
           "source tools/eda_env.sh && python fw_ip/*/work/tb_checks.py*": "allow",
           "source */tools/eda_env.sh && python */work/tb_checks.py*": "allow"
         }
@@ -273,7 +272,7 @@
       "steps": 120
     },
     "tb_syntax": {
-      "description": "Fixes Python/cocotb syntax, import, setup, and Makefile wiring issues.",
+      "description": "Fixes Python/cocotb syntax, import, setup, and run_vcst.py wiring issues.",
       "mode": "subagent",
       "model": "llamacpp/nemotron-30b",
       "prompt": "{file:../agents/NEMOTRON_NOTES.md}\n\n{file:../agents/subs/tb_syntax.md}",
@@ -287,7 +286,7 @@
       "steps": 120
     },
     "verification_architect": {
-      "description": "Writes the spec-level reference model, monitors, checkers, coverage and verification plan from the design doc ONLY (never the HDL or twin), on fw_py_tools.tb.",
+      "description": "Writes the spec-level reference model, monitors, checkers, coverage and verification plan from the design doc ONLY (never the HDL), on fw_py_tools.tb.",
       "mode": "subagent",
       "model": "llamacpp/nemotron-30b",
       "prompt": "{file:../agents/NEMOTRON_NOTES.md}\n\n{file:../agents/subs/verification_architect.md}",
@@ -295,7 +294,6 @@
         "read": {
           "*": "allow",
           "*/hdl/*": "deny",
-          "*_model/*": "deny",
           "*/work/*": "deny",
           "*/reviews/*": "deny",
           "*/testbench/*": "deny",
@@ -308,18 +306,12 @@
         },
         "bash": {
           "*": "allow",
-          "*_model*": "deny",
-          "*load_model*": "deny",
           "*/hdl/*": "deny",
           "*/work/*": "deny",
           "*/reviews/*": "deny",
           "*agent_runs*": "deny",
           "*tb_cocotb*": "deny",
           "*stimulus_generator*": "deny",
-          "*test_main_functionality*": "deny",
-          "*test_edge_cases*": "deny",
-          "*test_error_conditions*": "deny",
-          "*test_twin_lockstep*": "deny",
           "*tb_checks.py*": "deny",
           "source tools/eda_env.sh && python fw_ip/*/work/ref_checks.py*": "allow",
           "source */tools/eda_env.sh && python */work/ref_checks.py*": "allow"
@@ -330,7 +322,6 @@
           "*/hdl/*": "deny",
           "*/design_doc/preliminary_hdl_design_doc.md": "deny",
           "*/design_doc/simulation_plan.md": "deny",
-          "*_model/*": "deny",
           "*/work/*": "deny",
           "*/fw_py_tools/*": "deny",
           "*/vhdl_helper/*": "deny",

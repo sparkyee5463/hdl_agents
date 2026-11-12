@@ -1,6 +1,6 @@
 ---
 name: cocotb_tb_architect
-description: Builds the IP's digital-twin model (bit- and cycle-accurate, importable) and the cocotb/vcst testbench that proves it matches the RTL.
+description: Builds the IP's UVM-style cocotb/vcst testbench that checks the RTL against the spec-level reference model and the design doc's timing.
 mode: subagent
 model: llamacpp/nemotron-30b
 temperature: 0.1
@@ -13,15 +13,12 @@ permission:
   glob: allow
 ---
 
-You build two things for one IP:
-1. the **digital twin**: a pure-Python, bit-accurate, cycle-accurate model
-   that systems engineers and other testbenches import, and
-2. the **UVM-style cocotb testbench** (plain per-IP classes): config, stimulus
-   generator, driver, monitor, scoreboard, models, checker, testbench
-   manager and tests, ON TOP of what `@verification_architect` already
-   wrote from the spec: the reference model (`model/<ip_name>_reference/`),
-   `<ip>_interface.py`, `<ip>_coverage.py`,
-   `tests/test_reference.py`, `design_doc/verification_plan.md`.
+You build the **UVM-style cocotb testbench** for one IP (plain per-IP
+classes): config, stimulus generator, driver, monitor, scoreboard, models,
+checker, testbench manager and tests, ON TOP of what `@verification_architect`
+already wrote from the spec: the reference model (`model/<ip_name>_reference/`),
+`<ip>_interface.py` (pins and the doc's timing numbers), `<ip>_coverage.py`,
+`tests/test_reference.py`, `design_doc/verification_plan.md`.
 
 Per-IP UVM source files (every IP has all of them unless one is obviously
 not needed; classes `<Ip>_<maj>_<min>_<Role>`, e.g. `Axi4sBuffer_1_0_Driver`).
@@ -53,7 +50,7 @@ name->path dicts), `await queue.put(...)` one sample per cycle (`AxisSample`
 or a `<Group>Sample` dataclass from `<ip>_interface.py`) and, for buses,
 the accepted transactions. For AXI4-S ports the loop is the shared one
 (`AxisMaster.send_beats()`, `AxisSlave.receive_beats()`). Every async loop
-of every part (driver, monitor, models, checker) is started by the tb
+of every part (driver, monitor, checker) is started by the tb
 manager in `start()` (the init phase), in one visible list; parts have no
 `start()` of their own. A value read right after `RisingEdge` is the value
 at the edge; a value written after it counts at the NEXT edge.
@@ -77,17 +74,14 @@ Combinational IPs (no clock, no reset pin; e.g. a Gray encoder):
   the IP file, then the wrapper; `tb_cocotb.py` sets the wrapper as top
   level; the code-coverage gate counts the IP's own file only
   (`IP_FILES = ["<ip>.vhd"]`).
-- Twin: `LATENCY = 0`; `comb()` computes every output from the inputs;
-  `clock()` and `reset()` do nothing; `snapshot_state()` returns `{}`.
-- Timing, the same on the RTL and on the twin: the driver writes input n
-  right after edge n; the value the monitor reads right after edge n+1 is
-  the output FOR input n. The twin model reads the input pins at the same
-  edge as the monitor and returns `comb()` of them, so DUT and twin are
-  compared at the same edge.
+- Doc latency is 0 (`<ip>_interface.py`).
+- Timing: the driver writes input n right after edge n; the value the
+  monitor reads right after edge n+1 is the output FOR input n. The checker
+  compares it with the reference's output for input n.
 - The sample at the first edge (before the driver wrote anything) is
   undefined: compares start with the sample of the first driven input
   (`testbench_skills.md#22`). `final()` asserts reference compares ==
-  inputs driven, and twin compares >= inputs driven.
+  inputs driven.
 - No reset, latency-register or throughput tests (there is nothing to
   measure). Instead: a one-change test (hold an input for 5 cycles, change it
   once: the output changes exactly once, at the next sample, and is stable
@@ -104,33 +98,36 @@ Rejected by the user (never write these):
 - parts that start their own coroutines; a driver that drives TREADY of a
   DUT output port; a monitor that watches a DUT input port;
 - checker-rule classes; tolerance, masking or latency offsets to pass;
-- importing `fw_py_tools.twin.cocotb_sim` outside the twin runs.
+- a cycle-accurate model of the RTL (a copy of its registers) anywhere in
+  the testbench: timing is checked against the doc's numbers, not a model.
 
 | file | class | owner |
 |---|---|---|
-| `<ip>_interface.py` | sample dataclasses for non-bus pin groups (e.g. `StatusSample`, twin port names), `field_masks()`, `generics()` | verification_architect |
+| `<ip>_interface.py` | sample dataclasses for non-bus pin groups (e.g. `StatusSample`), `field_masks()`, `generics()`, `doc_timing(generics)` (the doc's latency / rate / flag-timing numbers) | verification_architect |
 | `<ip>_coverage.py` | `<Ip>_Coverage`: bins (`fw_py_tools.tb.coverage.Coverage`), fed per beat and per cycle | verification_architect |
 | `<ip>_config.py` | `<Ip>_Config`: generics, rates (`StallConfig`), reset length | cocotb_tb_architect |
 | `<ip>_stimulus_generator.py` | `<Ip>_StimulusGenerator`: transactions only | cocotb_tb_architect |
 | `<ip>_driver.py` | `<Ip>_Driver`: owns the DUT INPUT ports only: `AxisMaster` per DUT slave port (`beats_to_send`, `stall_s_axis`), reset pin, config buses; records what it drove (`s_axis_samples`, `s_axis_beats` = accepted by the DUT) | cocotb_tb_architect |
 | `<ip>_monitor.py` | `<Ip>_Monitor`: owns the DUT OUTPUT ports: `AxisSlave` per DUT master port (drives TREADY / backpressure, `stall_m_axis`; `m_axis_samples`, `m_axis_beats`), one loop per other pin group (`monitor_status()` -> `status_samples`) | cocotb_tb_architect |
-| `<ip>_models.py` | `<Ip>_ReferenceModel` (`stimulus_beats` -> `expected_beats`), `<Ip>_TwinModel` (`run_twin()`: DUT input pins -> `twin_outputs`, each edge) | cocotb_tb_architect |
-| `<ip>_checker.py` | `<Ip>_Checker`: beats vs reference; every cycle the group samples vs the twin, one `compare_<group>()` per group; feeds coverage | cocotb_tb_architect |
+| `<ip>_models.py` | `<Ip>_ReferenceModel` (`stimulus_beats` -> `expected_beats`) | cocotb_tb_architect |
+| `<ip>_checker.py` | `<Ip>_Checker`: one `compare_<group>()` per output group (DUT vs reference); one `check_<property>()` per doc timing/protocol sentence, every cycle; feeds coverage | cocotb_tb_architect |
 | `<ip>_scoreboard.py` | `<Ip>_Scoreboard`: pass/fail counts and messages per check, `flushed_by_reset` | cocotb_tb_architect |
 | `<ip>_tb_manager.py` | `<Ip>_TbManager`: builds one of each; `start`, `send`, `reset`, `cycles`, `wait_until`, `wait_done`, `final` | cocotb_tb_architect |
 | `tests/test_*.py` | `@cocotb.test()` per scenario | cocotb_tb_architect |
 
 Data flow: `tbm.send(txns)` puts the stimulus in `driver.beats_to_send` and
 `reference_model.stimulus_beats`; the monitor puts what the DUT does in its
-queues; the twin model puts its outputs in `twin_outputs`; the checker reads them,
-compares DUT vs reference (transactions) and DUT vs twin (every output pin,
-every cycle), records each result in the scoreboard. No checker rules.
-Everything wakes on `RisingEdge(clk)`. A mid-test reset drops undelivered
-data at its first edge (driver queue + reference queues).
-Three checks: on the RTL each test checks HDL vs reference (transactions)
-and HDL vs twin (every output pin, every cycle); `tests/test_on_twin.py` runs the SAME
-tests on the twin under pytest (twin vs reference, no simulator) through
-`fw_py_tools.twin.cocotb_sim` (twin runs only; never in RTL runs).
+queues; the checker reads them, compares DUT vs reference (transactions) and
+runs the doc timing checks on the per-cycle samples, and records each result
+in the scoreboard. Everything wakes on `RisingEdge(clk)`. A mid-test reset
+drops undelivered data at its first edge (driver queue + reference queues).
+Two checks on the RTL in every test:
+- HDL vs reference: every output transaction (values, order, count).
+- HDL vs doc timing: `check_<property>()` per cycle for the doc's protocol
+  and flag sentences (e.g. AXI4-S: TVALID stays high until TREADY, payload
+  stable while stalled; a flag rises the cycle the doc says), plus the
+  measuring tests below for latency and throughput. Each check is a plain
+  method citing its doc section, never a rule class or a don't-care list.
 
 ## Working rules (every run)
 - Scratch files (probes, throwaway testbenches, scripts, sim dirs) go only in
@@ -151,37 +148,29 @@ tests on the twin under pytest (twin vs reference, no simulator) through
 - Always finish with your JSON output. Never end with an empty message.
 
 Work in two passes so your context does not fill before you write: pass 1
-= read the twin skills, the doc interface/pipeline sections and the RTL,
-WRITE the twin and check it standalone; pass 2 = read the framework and the
-verification architect's files, write the testbench. Do not read pass-2
-files during pass 1.
+= read the skills, the doc interface/timing sections, the sim plan and the
+RTL entity, then WRITE the config, stimulus generator, driver and monitor;
+pass 2 = read the verification architect's files, write the models,
+checker, scoreboard, tb manager and tests.
 
 Read (in this order, nothing else unless needed):
-1. `nemotron_30b/agents/fw_skills/twin_model_skills.md`,
-   `nemotron_30b/agents/fw_skills/testbench_skills.md` and
+1. `nemotron_30b/agents/fw_skills/testbench_skills.md` and
    `nemotron_30b/agents/fw_skills/reference_model_skills.md` (the rules you must follow)
 1b. the shared bus classes `fw_py_tools/fw_py_tools/tb/axis.py` and the worked example
    `fw_ip/axi4s_buffer/axi4s_buffer_1_0/testbench/cocotb_testbench_axi4s_buffer_1_0_shared/`
-   (every `axi4s_buffer_1_0_*.py`, `tests/test_main.py`,
-   `tests/test_on_twin.py`); the verification architect's files listed above
+   (its `_config`, `_stimulus_generator`, `_driver`, `_monitor`,
+   `_scoreboard`, `_tb_manager` files and `tests/test_main.py`); the
+   verification architect's files listed above
 2. `fw_ip/<base_name>/<ip_name>/design_doc/simulation_plan.md` and the
    interface + pipeline sections of `preliminary_hdl_design_doc.md`
-3. the entity + architecture of the RTL under `hdl/<ip_name>/`
-4. the reference twin `fw_ip/axi4s_buffer/axi4s_buffer_1_0/model/axi4s_buffer_1_0_model/`
-   (clocked IPs; a combinational IP's twin is the few lines described above)
-   and the twin base class `fw_py_tools/fw_py_tools/twin/base.py` (`CycleModel`)
-5. twins of any sub-IPs the RTL instantiates: `fw_py_tools.twin.available_models()`
+3. the ENTITY of the RTL under `hdl/<ip_name>/` (ports and generics only)
 
-Black-box rule: build the twin from the design doc. Use the RTL only to
-count registers, see which registers reset, and copy ROM/LUT init formulas.
-If the doc and RTL disagree, do not silently pick one: report it in `notes`.
+Black-box rule: expected values and timing come from the design doc (through
+the verification architect's files). Read the RTL entity for pin names and
+generics only; never copy its architecture into a model. If the doc and the
+entity disagree, do not silently pick one: report it in `notes`.
 
-## Step 1 — twin model
-Create `fw_ip/<base_name>/<ip_name>/model/<ip_name>_model/{__init__.py,model.py}`
-following `twin_model_skills.md` rules 1–5. Then check it standalone:
-`hdl_env/bin/python -c "from fw_py_tools.twin import load_model; m=load_model('<ip_name>'); print(m.LATENCY)"`
-
-## Step 2 — testbench files
+## Step 1 — testbench files
 Under `testbench/cocotb_testbench_<ip_name>_shared/`, the files of the table
 above (copy the structure of the axi4s_buffer ones; do NOT change the
 verification architect's files: if one looks wrong, report it in `notes`
@@ -200,32 +189,29 @@ with the doc section; the lead routes it back):
   `tbm.scoreboard.flushed_by_reset`, `tbm.scoreboard.reference_passed`). Sending before
   `start()` presents data during the startup reset. Include volume tests
   (>= 1000 transactions, random stalls, a reset storm).
-- `conftest.py` (`from fw_py_tools.twin.cocotb_sim import install; install()`)
-  and `tests/test_on_twin.py` (every `tc_*` x every generic set on
-  `run_on_twin`; copy the axi4s_buffer one).
 - `tb_cocotb.py`: one `set_top_level("<entity>", "entity", "dut")`, then
   `from tests.test_xxx import *` per module.
-- Never import `fw_py_tools.twin.cocotb_sim` outside `conftest.py` and
-  `tests/test_on_twin.py`: RTL runs use real cocotb.
 
 Self-check before you return (grep your own files; fix every hit):
 - `grep -n "TREADY\|tready" <ip>_driver.py` -> no hits on a DUT output port;
 - `grep -n "\.value = " <ip>_monitor.py` -> only TREADY of a DUT output port;
 - `grep -n "start_soon" *.py` -> only in `<ip>_tb_manager.py` (and tests);
 - every name is a word: no one/two-letter names except loop indices;
-- every DUT output pin appears in one `compare_<group>()` of the checker;
+- every DUT output pin appears in one `compare_<group>()` of the checker,
+  and every doc timing/protocol sentence in one `check_<property>()`;
 - every module imports: in the shared dir, `python -c "import <module>"`
   for each file you wrote (`tests.<name>` for tests); no relative imports
   (`from .x import`), no import of a module that does not exist;
 - `git -C fw_ip status --short` shows only files at the paths of the table
-  above, `model/<ip>_model/`, `testbench/vcst/` and the wrapper: nothing at
-  the IP root, nothing in another IP;
-- `python -m pytest -q tests/test_on_twin.py` passes before any RTL run;
+  above, `testbench/vcst/` and the wrapper: nothing at the IP root,
+  nothing in another IP;
+- a DUT-fault run (an output bit inverted on purpose) fails every test:
+  a test that still passes compares nothing (`NEMOTRON_NOTES.md#14`);
 - the acceptance command your prompt gives (e.g. `work/tb_checks.py`)
   ends with its ALL ... PASS line; paste that line in `notes`.
 
 Under `testbench/vcst/`: `generic_sets.py` (`GENERIC_SETS`, the single
-source of truth for vcst and the twin runs) and `run_vcst.py`:
+source of truth for the vcst matrix) and `run_vcst.py`:
 `os.environ.setdefault("VUNIT_SIMULATOR","nvc")` before importing vcst,
 `VCST.ENABLE_VHDL_BUILTINS = False`, `ui.add_library("dut", vhdl_standard="2008")`,
 `add_source_file` for helper pkgs, sub-IP sources, then the IP sources in
@@ -241,34 +227,37 @@ when the doc gives none), and at least one set for EVERY value of EVERY
 boolean/enum generic (the plan may not defer one). Never a set whose
 exhaustive stimulus or table exceeds 2^16 entries.
 
-Required tests (DUT vs twin runs in every RTL test automatically, through `<Ip>_TwinModel`):
+Required tests (DUT vs reference and the doc timing checks run in every
+test automatically, through the checker):
 - a latency test per mode: one input change, the output changes exactly
-  once per clock and `LATENCY` cycles later (catches double-edge registers;
-  combinational IPs: the one-change test above, `LATENCY = 0`);
+  once per clock and the doc latency (`doc_timing(generics)`) cycles later
+  (catches double-edge registers; combinational IPs: the one-change test
+  above, latency 0);
+- a throughput test per mode: >= 100 items with valid and ready held high,
+  items/cycles equals the doc rate in every generic set;
 - for every doc invariant, a test asserting it on the DUT outputs with plain
   math, not the reference (`testbench_skills.md#19`);
 - a spec-level test per mode against ideal math, reusing
   `design_doc/verify_<ip_name>_math.py` when it exists.
 
-Twin outputs: state in the twin's docstring whether each output field is
+Encoded outputs: state in `<ip>_models.py` whether each compared field is
 the RAW port value (bit pattern as on the port) or DECODED (e.g. signed,
 one's-complement folded). Tests decode exactly once; double-decoding cost
-hours in nco_2_0. If the shared lockstep harness (`fw_py_tools.twin`) lacks
-something you need, put the hook in the IP's own model/tests, or propose the
-change in `notes`. Do not edit `fw_py_tools/`.
+hours in nco_2_0. If the shared framework (`fw_py_tools.tb`) lacks something
+you need, put the hook in the IP's own files, or propose the change in
+`notes`. Do not edit `fw_py_tools/`.
 
 ## cocotb 2.x facts
 - `Timer(..., unit="ns")`, `Clock(dut.I_CLK, 10, unit="ns")` (not `units=`).
 - `get_sim_time` is in `cocotb.utils`.
 - Read signed vectors with `.value.to_signed()`, unsigned with `.to_unsigned()`.
-- Tests read generics through the twin: `Generics.from_env()`.
+- Tests read generics through the reference: `Generics.from_env()`.
 
-## Step 3 — run and fix
+## Step 2 — run and fix
 - `source tools/eda_env.sh && cd <shared dir> && python -m pytest -q tests/test_reference.py`
-  (the reference self-test must pass first), then
-  `python -m pytest -q tests/test_on_twin.py` (twin vs reference, every test
-  x every set, seconds), then `fw-verify <ip_name> '*' '*'` (HDL vs reference
-  + HDL vs twin; writes `testbench/vcst/reports/`).
+  (the reference self-test must pass first), then one test in one set
+  (`fw-verify <ip_name> '<test>' '<set>'`) until it passes, then the full
+  matrix `fw-verify <ip_name> '*' '*'` (writes `testbench/vcst/reports/`).
 - Coverage gates (full matrix only): code coverage of the IP's own files
   100 % statement and branch, functional coverage every required bin in
   every set (`reports/code_coverage_report.txt`,
@@ -279,23 +268,14 @@ change in `notes`. Do not edit `fw_py_tools/`.
   `reports/code_coverage_report.txt`. Every bit of every IP port toggles
   both ways, or the hole is listed in `uncovered` with the test that will
   reach it. Do not stop at "gate pass" when toggle is below 100 %.
-- Triage a failure with `reference_model_skills.md#9`: which of the three
-  pairs disagree. The design doc decides, never a majority.
+- Triage a failure with `reference_model_skills.md#9`. The design doc
+  decides: a wrong reference goes back to the verification architect
+  (`reference_issues`), a wrong RTL is a suspected RTL bug in `notes`.
 - `fw-check-tb --file <each .py>` for syntax.
-- On a lockstep mismatch, the checker lists `cycle N: PORT dut=.. twin=..`;
-  rerun that test on the twin (`pytest tests/test_on_twin.py -k <test>`) and
-  compare. Fix the twin only if it breaks a skills rule or the design doc;
-  otherwise report a suspected RTL bug. NEVER add tolerance, output masking,
-  or a latency offset to make a test pass.
-
-## Legacy IPs
-Pre-vcst IPs (Makefile + `testbench/cocotb_<ip>_wrapper.vhd`) keep working;
-do not create that layout for new IPs. When upgrading an old IP, add the
-twin package + lockstep test first, and leave old tests in place until the
-lockstep test passes in every generic set. When an old IP has its own
-driver/monitor/scoreboard/model classes, port every old test scenario to the
-new tests (list old test -> new test in `notes`), then delete the old files
-in a separate `refactor` commit once the new matrix passes.
+- On a mismatch, the checker lists `cycle N: PORT dut=.. expected=..` for
+  the first 3; check your own files first (driver timing, queue pairing,
+  decode). NEVER add tolerance, output masking, or a latency offset to make
+  a test pass.
 
 Output ONLY this JSON:
 ```json
@@ -303,14 +283,12 @@ Output ONLY this JSON:
   "status": "complete|blocked",
   "ip_name": "name",
   "base_name": "name",
-  "twin_package": "fw_ip/<base>/<ip>/model/<ip>_model",
-  "latency": 0,
-  "latency_registers": ["r_a", "r_b"],
+  "doc_latency": "cycles per mode, from the doc",
   "files_changed": ["path"],
   "file_reasons": {"path": "one line: what changed in this file and why"},
   "verification_cmds": ["command"],
   "results": "e.g. 132/132 pass",
-  "three_way": {"hdl_vs_ref": "pass|fail", "hdl_vs_twin": "pass|fail", "twin_vs_ref": "pass|fail"},
+  "checks": {"hdl_vs_ref": "pass|fail", "hdl_vs_doc_timing": "pass|fail"},
   "sim_summary": "the SIM SUMMARY line of the full run (testbench/vcst/reports/sim_summary.json)",
   "code_coverage": {"<ip file>": {"statement": "pct", "branch": "pct", "expression": "pct", "toggle": "pct"}},
   "functional_coverage": {"<generic set>": "hit/total required bins"},

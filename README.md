@@ -1,7 +1,7 @@
 # hdl_agents
 
 OpenCode agent sets for firmware HDL work (VHDL-2008 RTL, cocotb/UVM-style
-testbenches, digital twins, synthesis). Each directory is one agent set tuned
+testbenches, reference models, synthesis). Each directory is one agent set tuned
 for one model and versioned on its own.
 
 | Directory | Model | Version |

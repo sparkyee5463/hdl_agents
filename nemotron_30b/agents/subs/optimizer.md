@@ -38,7 +38,7 @@ Responsibilities:
 - Read baseline HDL and Vivado/OpenROAD reports.
 - Generate `_s0`, `_s1`, and `_s2` variants under `hdl/`.
 - Preserve the base port list and generic names unless the user explicitly asks for an interface change.
-- Create/update variant Makefiles and cocotb wrappers.
+- Create/update variant generic sets in `testbench/vcst/` and cocotb wrappers.
 - Update `design_doc/optimization.md`.
 - Simulate every generated variant through `@sim_runner`.
 - Run synthesis through `@vivado_ooc` and optional `@openroad_synth`.
@@ -49,11 +49,11 @@ Variant goals:
 - `_s2`: reduce LUT/FF/DSP/BRAM use through sharing, narrower datapaths, and safe pipeline reduction.
 
 Rules:
-- Latency changes must be documented and reflected in wrapper/testbench/model behavior.
-- Every variant must pass the IP's twin lockstep tests (`tc_twin_*`). If a
-  variant changes latency, add a `variant` argument to the twin's `Generics`
-  (e.g. extra pipeline stages) instead of copying the model; keep one twin
-  package per IP.
+- Latency changes must be documented in the design doc and reflected in
+  `doc_timing()` (per variant) and the wrapper.
+- Every variant must pass the IP's full testbench (reference compare and
+  doc timing checks). The reference model stays one package per IP: a
+  variant changes timing, never WHAT comes out.
 - Do not trust synthesis numbers for a variant that fails simulation.
 - Reference specific report paths, signals, or paths that motivated each optimization.
 

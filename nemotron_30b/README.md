@@ -79,12 +79,26 @@ The prompts assume this layout under the project root (names are relative):
 
 - `tools/eda_env.sh` puts the HDL venv (`python`, `nvc`, `fw-*` tools) on PATH.
 - `fw_ip/<base_name>/<ip_name>/...` with `ip_name = <base_name>_<major>_<minor>`;
-  `hdl/`, `design_doc/`, `model/<ip>_model/` (twin), `model/<ip>_reference/`,
+  `hdl/`, `design_doc/`, `model/<ip>_reference/`,
   `testbench/cocotb_testbench_<ip>_shared/`, `testbench/vcst/`, `work/`.
-- `fw_ip/fw_py_tools/` (twin library, vcst) and `fw_ip/vhdl_helper/`: shared,
+- `fw_ip/fw_py_tools/` (`fw_py_tools.tb` framework, vcst) and `fw_ip/vhdl_helper/`: shared,
   agents never edit them.
 - `fw_ip/.walkthrough/fw_git.sh`: the only git entry point the lead uses
   (start / commit / merge per IP branch `ip/<ip_name>`).
+
+## Verification flow
+
+Every RTL test runs two checks, both derived from the design doc:
+
+- **HDL vs reference:** the checker compares every output transaction
+  (values, order, count) with the spec-level reference model written by
+  `verification_architect` from the doc only.
+- **HDL vs doc timing:** the checker runs one `check_<property>()` per doc
+  protocol/flag sentence every cycle, and dedicated tests measure latency
+  and throughput against `doc_timing()` in `<ip>_interface.py`.
+
+There is no cycle-accurate model of the RTL: timing is checked against the
+doc's numbers, so a model can't copy an RTL bug into the expected values.
 
 ## Permission design
 
@@ -96,7 +110,7 @@ so independence and scope are enforced in `opencode.json`:
   `fw_skills/`; the built-in `general`/`explore`/`build`/`plan` agents are
   denied so it can't route around subagent permissions.
 - `verification_architect` writes the reference model and coverage from the
-  design doc and cannot read the RTL, twin or testbench.
+  design doc and cannot read the RTL or testbench.
 - `cocotb_tb_architect` cannot edit the reference model, coverage, RTL,
   design doc or shared libraries.
 - `hdl_reviewer` writes only `reviews/*`.

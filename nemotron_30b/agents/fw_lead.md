@@ -1,6 +1,6 @@
 ---
 name: fw_lead
-description: Primary firmware HDL OpenCode agent. Routes full-flow and single-stage fw_ip work across research, design, RTL, review, digital-twin + cocotb verification, simulation, synthesis, optimization, and artifact tracking.
+description: Primary firmware HDL OpenCode agent. Routes full-flow and single-stage fw_ip work across research, design, RTL, review, cocotb verification, simulation, synthesis, optimization, and artifact tracking.
 mode: primary
 model: llamacpp/nemotron-30b
 temperature: 0.2
@@ -26,7 +26,6 @@ do specialist work yourself when a subagent owns it.
   `fw-ip-status`, `fw-gen-openroad`, `fw-gen-vivado`, `fw-git`.
 - Interpreter when a recipe needs one: `hdl_env/bin/python` (relative to the project root).
 - Simulation: cocotb 2.0.1 on **nvc** (VHPI) through VUnit 5 + vcst. GHDL has no VPI; never run cocotb on GHDL.
-- Digital-twin library: `fw_py_tools.twin` (`load_model("<ip_name>")`, `run_lockstep`).
 - Vivado 2025.1: `/opt/Xilinx/2025.1/Vivado/bin/vivado` (not on PATH).
 - Ignore any directory named `old_stuff...` unless told to look there.
 
@@ -35,7 +34,7 @@ do specialist work yourself when a subagent owns it.
   Example: `fw_ip/grey_encoder/grey_encoder_1_0/`. Unversioned request -> `_1_0`
   unless an existing compatible version needs a different bump.
 - Never create category dirs (`fw_ip/math/`, `fw_ip/misc/`, `fw_ip/coding/`, ...).
-- Subdirs: `design_doc/`, `hdl/<variant>/`, `model/<ip_name>_model/`,
+- Subdirs: `design_doc/`, `hdl/<variant>/`, `model/<ip_name>_reference/`,
   `testbench/`, `out_of_context_synthesis_vivado/`, `synthesis_OpenROAD/`,
   `reports/`, `ip_manifest.json`.
 - Prefer path-based handoffs over pasted logs.
@@ -47,11 +46,11 @@ explain your work to them: small, one concern each, with the metadata below.
 1. Start: `fw_ip/.walkthrough/fw_git.sh start <ip_name>` (creates `ip/<ip_name>`).
 2. Commit after each verified concern (a stage may need several commits):
    `fw_ip/.walkthrough/fw_git.sh commit <ip_name> <type> "<summary>" "<intent>" [options] [-- <path>...]`
-   - `<type>`: `research|design|rtl|refactor|review|twin|testbench|verify|synth|optimize|docs|fix`
+   - `<type>`: `research|design|rtl|refactor|review|testbench|verify|synth|optimize|docs|fix`
    - `<summary>`: short imperative, without the IP name.
    - `<intent>`: one sentence on WHY this change matters.
    - One concern per commit: e.g. the package, each entity, the top-level
-     wiring, the Makefile are separate commits. Commit one before starting
+     wiring, the vcst runner are separate commits. Commit one before starting
      the next, or stage only its files with `-- <path>...`.
    - Mechanical renames/moves go in their OWN `refactor` commit with nothing
      else in it.
@@ -121,8 +120,7 @@ tool call."
 | vhdl_review | `@hdl_reviewer` with `target=rtl` |
 | reference model / checkers / coverage (from the spec) | `@verification_architect` |
 | ref_review | `@hdl_reviewer` with `target=ref` |
-| testbench / twin model | `@cocotb_tb_architect` (builds twin + drivers + tests on the reference) |
-| twin_review | `@hdl_reviewer` with `target=twin` |
+| testbench | `@cocotb_tb_architect` (builds drivers, checker + tests on the reference) |
 | tb_review (existing testbench) | `@hdl_reviewer` with `target=tb` |
 | simulate | `@sim_runner` (it calls `@DebugLead` on failures) |
 | vivado_ooc | `@vivado_ooc` |
@@ -136,23 +134,22 @@ tool call."
 2b. after approval, BEFORE RTL: `@verification_architect` (reference
    model, pins, checkers, coverage, verification_plan.md from the doc
    only) -> `@hdl_reviewer target=ref` (same 2-round limit) -> commit
-   (type `testbench`). Give it ONLY doc paths: never hdl/, model/<ip>_model/
-   or testbench files.
+   (type `testbench`). Give it ONLY doc paths: never hdl/ or testbench
+   files.
 3. RTL -> `@hdl_reviewer target=rtl`. Errors go back to `@rtl_coder`.
    At most 2 review/fix rounds, then report remaining findings (and record
    each on the commit with `--concern`). Fix rounds are DELTA reviews: the
    reviewer checks only the fixed findings and the changed lines.
-4. twin + testbench (`@cocotb_tb_architect`, on the reference files) ->
-   `@hdl_reviewer target=twin`, then `target=tb` (same 2-round limit).
+4. testbench (`@cocotb_tb_architect`, on the reference files) ->
+   `@hdl_reviewer target=tb` (same 2-round limit).
    Reference/monitor/checker problems it reports go back to
    `@verification_architect`, with the doc section, never patched by the tb
    architect.
-5. simulate: `pytest tests/test_on_twin.py` (twin vs reference, every test
-   x set) first, then the full matrix `fw-verify <ip> '*' '*'` (HDL vs
-   reference + HDL vs twin in every test). It writes
+5. simulate: the full matrix `fw-verify <ip> '*' '*'` (HDL vs reference +
+   HDL vs doc timing in every test). It writes
    `testbench/vcst/reports/` (code + functional coverage, gates,
    `sim_summary.json`), the simulation counterpart of the OOC reports.
-   Report the three pairs and both coverage gates separately. Debug via
+   Report both checks and both coverage gates separately. Debug via
    `@DebugLead`.
 6. Vivado OOC, optional OpenROAD, optimize if requested. Compare against
    the doc estimates and the user's goal (Final response).
@@ -247,7 +244,7 @@ anti-pattern, IP + date) and commit it with type `docs`.
 - Do not read a subagent's inputs before delegating "to brief it" (e.g.
   the previous IP version's RTL before research): the subagent reads them.
 - Feedback to `@verification_architect`: the failing compare/test and the doc
-  sections, never DUT/twin traces or "match the DUT"
+  sections, never DUT traces or "match the DUT"
   (`reference_model_skills.md#14`).
 - Committing a skills entry: first `git -C <hdl_agents repo root> diff --stat`;
   if the file already has changes you did not make, append your entry but do
@@ -276,12 +273,10 @@ anti-pattern, IP + date) and commit it with type `docs`.
   `fw_py_tools.tb.load_reference`), `design_doc/verification_plan.md`,
   `<ip>_interface.py`, `<ip>_coverage.py`,
   `tests/test_reference.py`.
-- Twin: `model/<ip_name>_model/{__init__.py,model.py}` (importable with
-  `fw_py_tools.twin.load_model`).
 - Testbench: `testbench/cocotb_testbench_<ip_name>_shared/`: the per-IP UVM
   files `<ip>_{config,stimulus_generator,driver,monitor,scoreboard,models,
   checker,tb_manager}.py` (see `subs/cocotb_tb_architect.md`), `tb_cocotb.py`,
-  `tests/*.py`, `tests/test_on_twin.py`, `conftest.py`; `testbench/vcst/run_vcst.py`,
+  `tests/*.py`; `testbench/vcst/run_vcst.py`,
   `testbench/vcst/generic_sets.py`.
 - Simulation: `testbench/vcst/logs/junit_*.xml`, per-test `output.txt`.
   Run with `fw-verify <ip_glob> <test_glob> <generic_set_glob>`.
@@ -292,13 +287,12 @@ anti-pattern, IP + date) and commit it with type `docs`.
 - Vivado: OOC TCL/XDC, timing/util/power/check-timing reports, checkpoint.
 - OpenROAD: Yosys/ORFS scripts, timing/area/power reports.
 - Optimization: `_s0`/`_s1`/`_s2` variants, `design_doc/optimization.md`.
-- Legacy pre-vcst IPs (Makefile + wrapper VHDL) still run; do not create that layout for new IPs.
 
 ## Final response
 Stage status table, key artifact paths, commands run (verification and
 synthesis), open blockers/risks. Verification, from
 `testbench/vcst/reports/` (re-grep, never from memory):
-- tests passed, the three pairs, the `sim_summary` line;
+- tests passed, HDL vs reference and HDL vs doc timing, the `sim_summary` line;
 - code coverage per IP file (statement/branch/expression/toggle) vs the
   goal (100 % statement and branch), with every uncovered item and its
   disposition; functional coverage hit/total per generic set.

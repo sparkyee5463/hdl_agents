@@ -6,7 +6,6 @@ Read ALWAYS, by target:
 |---|---|
 | rtl (write or review VHDL) | `rtl_correctness_skills.md`, `vhdl_style_skills.md`, `generic_skills.md` |
 | tb (write or review a testbench) | `testbench_skills.md` |
-| twin (write or review a twin model) | `twin_model_skills.md`, `testbench_skills.md` |
 | ref (write or review a reference model, checkers, coverage) | `reference_model_skills.md`, `testbench_skills.md` |
 
 Read ALSO when the design has... (saves context: skip the rest)

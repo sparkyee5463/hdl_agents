@@ -54,7 +54,7 @@ sin/cos/coefficient tables (NCO, mixers, filters, FFT, complex multiply).
 
 - Every DSP block gets one test against ideal float math (numpy) with an
   SNR or max-error bound derived from the word lengths, in addition to
-  bit-exact lockstep against the twin (`testbench_skills.md#3`).
+  the exact compare against the reference model (`testbench_skills.md#3`).
 - The design stage writes `design_doc/verify_<ip>_math.py` that computes
   the claimed spec numbers per mode from the algorithm as specified; the
   doc quotes its output and the testbench reuses it. A numeric check in
@@ -85,8 +85,7 @@ sin/cos/coefficient tables (NCO, mixers, filters, FFT, complex multiply).
   `attribute use_dsp : string; ... "yes"`.
 - **Anti-pattern:** `entity unisim.DSP48E2` instances. In nco_2_0 this cost
   hours of nvc unisim setup (a 97k-line VCOMPONENTS package, a global
-  `~/.nvc` install), an entity-only stub for Vivado project-less OOC, a twin
-  that has to mirror vendor semantics, and blocked the Yosys/OpenROAD flow.
+  `~/.nvc` install), an entity-only stub for Vivado project-less OOC, and blocked the Yosys/OpenROAD flow.
   Instantiate only with a written reason in the design doc (e.g. cascade or
   pattern detect inference cannot reach), behind a generic, with a plain
   VHDL fallback. (nco_2_0, 2026-10-28)
@@ -117,4 +116,4 @@ sin/cos/coefficient tables (NCO, mixers, filters, FFT, complex multiply).
   `-x`: `not x = -x - 1`, which is two's-complement negation with a constant
   -0.5 LSB offset that is symmetric for the half-step table. No adder and
   no special decoder. Document that the output is one's complement and that
-  the twin outputs the raw pattern. (nco_2_0, 2026-10-27)
+  the reference gives the raw pattern. (nco_2_0, 2026-10-27)

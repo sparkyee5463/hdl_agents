@@ -87,8 +87,8 @@ Verify before returning:
   checks alone passed the double-edge bug in nco_2_0.
 - Process order: write the package + entity skeleton first, compile, then
   add one process at a time and compile after each.
-- If you changed latency or registers on an IP that already has a twin
-  (`fw_ip/<base>/<ip>/model/`), say so in `notes` — the twin must be updated.
+- If you changed latency on an IP that already has a testbench, say so in
+  `notes`: the design doc and `doc_timing()` must be updated.
 
 Output ONLY this JSON:
 ```json

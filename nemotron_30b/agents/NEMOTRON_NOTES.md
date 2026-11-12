@@ -13,7 +13,7 @@ once. They apply to the lead and to every subagent, on top of your own prompt.
   repeated its final report + `true` 20 times and never returned.)
 
 ## 2. The lead delegates, it does not read
-- Do not read the files a subagent will read (design doc, old tests, the
+- Do not read the files a subagent will read (design doc, sim plan, the
   worked example) before calling it. Give it paths; it reads them.
 - After a subagent returns, check its files exist (`ls`), run the one
   command it gives you, and commit. Do not re-do its work.
@@ -42,10 +42,10 @@ once. They apply to the lead and to every subagent, on top of your own prompt.
 ## 4. A denied read or write is denied on purpose
 - A refused write (edit/write tool) means the file is not yours. Never write
   it another way (bash heredoc, `cat >`, `tee`, `sed -i`, `python -c`).
-- If a read is refused, or your prompt forbids a file (hdl/, the twin
-  `model/<ip>_model/`, old testbench files), do NOT get the same content
-  another way: no `cat`, no `python -c "load_model(...)"`, no `dir()` of
-  the twin, no grep in it. Work from what you may read.
+- If a read is refused, or your prompt forbids a file (hdl/, testbench
+  files that are not yours), do NOT get the same content another way: no
+  `cat`, no `python -c "import ..."`, no `dir()`, no grep in it. Work from
+  what you may read.
 
 ## 5. Readable code
 - Every name is a word or words: `phase_width`, `address_bits`,
@@ -90,17 +90,15 @@ once. They apply to the lead and to every subagent, on top of your own prompt.
 - Every bin must be reachable by some test; list which test reaches it.
 
 ## 9. Protected files and failing tests (cocotb_tb_architect)
-- Files your task says are done (reference model, interface, coverage, twin,
-  RTL, design doc, old test files) are NOT yours. If a test fails, the bug is
+- Files your task says are done (reference model, interface, coverage,
+  RTL, design doc) are NOT yours. If a test fails, the bug is
   in the files YOU wrote. Never change a protected file, not with the edit
   tool and not with `sed`/`python3 -c`/`cat >` in bash. (tb run A,
   2026-11-07: the architect "fixed" the graded reference to hide its own
   checker bug.)
-- Never build new files on old ones the task replaces (e.g. old
-  `tests/common.py`): read them for scenarios, import nothing from them.
 
 ## 10. cocotb loops
-- A per-edge loop (driver, monitor, twin model) awaits ONLY the clock edge.
+- A per-edge loop (driver, monitor) awaits ONLY the clock edge.
   Inside it use `queue.get_nowait()` after checking `queue.empty()`; an
   `await queue.get()` there stops the loop on the first empty cycle.
 - A consumer loop (checker) awaits ONLY its queues, never the clock too:
@@ -113,9 +111,9 @@ once. They apply to the lead and to every subagent, on top of your own prompt.
 ## 11. Never switch off a check to make a test pass (cocotb_tb_architect)
 - If a compare fails, the fix is never to skip it, `pass` it, count a pass
   when there was nothing to compare, or accept "0 compares". (tb run A2,
-  2026-11-07: the checker skipped every reference compare on the twin and
-  counted passes with no data; the report blamed a "structural mismatch"
-  between reference and twin that does not exist: they match exactly.)
+  2026-11-07: the checker skipped every reference compare and counted
+  passes with no data; the report blamed a "structural mismatch" that did
+  not exist.)
 - A test that passes with 0 compares is not a pass. Print
   `scoreboard.report()` and read the counts: compares >= inputs - flushed.
 - A file the task says to keep (e.g. `generic_sets.py`) or does not list
@@ -123,34 +121,25 @@ once. They apply to the lead and to every subagent, on top of your own prompt.
 - Every name you use is imported: run
   `source tools/eda_env.sh && python -c "import <module>"` in the tb dir for
   each file you write. (A2: `RisingEdge` and `read` were used unimported,
-  hidden only because that code never ran on the twin.)
+  hidden only because that code had never run.)
 - When the prompt gives a design, re-read it after each file and check every
   bullet. Where the prompt gives code, copy it.
 
 ## 12. Paste outputs, never summaries of them
 - The final report pastes the LAST line of each check command exactly as
   printed. Never write "static checks pass" or "N of M pass" in place of the
-  output. (tb run B1, 2026-11-07: the lead reported port_checks static
-  checks as passing; they failed on two lines, and test_errors.py did not
-  even import.)
-- A ported assertion that fails is a wrong port (other stimulus, other
-  samples, other cycle), not an assertion "to tune": the old test passed on
-  the RTL. Compare your test with the old one line by line.
+  output. (tb run B1, 2026-11-07: the lead reported static checks as
+  passing; they failed on two lines, and one test file did not even import.)
 
-## 13. A ported assertion checks the same thing as the old one
-- Never replace an old assertion with a weaker one: no range checks
+## 13. Assertions check exact values
+- Never weaken an assertion to make it pass: no range checks
   (`-fs <= v <= fs`), `len(...) > 0`, `count >= N` or "values exist" in place
-  of the old exact values, bounds, cycles or sets. Never return a made-up
-  limit (`err_bound()` returning 1000) and never wrap assertions in
+  of exact values, bounds, cycles or sets the doc gives. Never return a
+  made-up limit (`err_bound()` returning 1000) and never wrap assertions in
   `try/except: pass`. (tb run B2, 2026-11-07: every one of these, in 11
   tests; the report called the result "scenario assertions added".)
-- Port by copying the old test line by line and replacing ONLY the names the
-  task's translation table lists. Everything else (indices, expressions,
-  messages, if/else per mode) stays as it was.
-- Stimulus helpers keep the old ones' exact behaviour (the old `en_seq`,
-  `tone_burst`, `reset_in_windows`): same inputs, same order, same count.
-- The reviewer's scenario check corrupts what the assertions read; a port
-  that still passes under a corruption the old test catches is rejected.
+- The reviewer's fault check corrupts what the assertions read; a test that
+  still passes under the corruption is rejected.
 
 ## 14. Acceptance commands decide "done"
 - When your prompt gives an acceptance command (e.g.
@@ -166,11 +155,11 @@ once. They apply to the lead and to every subagent, on top of your own prompt.
   loops reading the monitor's queue (a compare loop and a coverage loop) each
   see half the samples: half the compares then fail. Sample coverage in the
   same loop that compares. (grey_encoder run5: 25 of 50 compares failed this
-  way, and the report blamed the twin scheduler.)
+  way, and the report blamed the shared scheduler.)
 - The expected value of a sample comes from the input the DRIVER drove for
   it (`driver.driven_inputs`), not from what a test queued with `send()`.
-- `fw_py_tools.twin.cocotb_sim` and the twin base class are tested and used by
-  every IP. When a twin run fails, the bug is in your files: print the first
+- The shared framework (`fw_py_tools.tb`, cocotb, vcst) is tested and used by
+  every IP. When a run fails, the bug is in your files: print the first
   3 mismatches (input, expected, got) and find the off-by-one or the shared
   queue. Never report "harness synchronization issue" without a 10-line
   reproduction that uses no file of yours.
