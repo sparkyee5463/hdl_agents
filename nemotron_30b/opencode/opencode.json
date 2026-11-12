@@ -1,0 +1,344 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "llamacpp": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "llama.cpp (local)",
+      "options": {
+        "baseURL": "http://127.0.0.1:8080/v1",
+        "apiKey": "not-needed"
+      },
+      "models": {
+        "nemotron-30b": {
+          "name": "Nemotron 3.5 Lightning 30B-A3B UD-Q4_K_M",
+          "tool_call": true,
+          "reasoning": true,
+          "limit": {
+            "context": 262144,
+            "output": 32000
+          }
+        }
+      }
+    }
+  },
+  "model": "llamacpp/nemotron-30b",
+  "default_agent": "fw_lead",
+  "subagent_depth": 3,
+  "compaction": {
+    "auto": true,
+    "prune": false,
+    "reserved": 32000
+  },
+  "agent": {
+    "fw_lead": {
+      "description": "Primary firmware HDL agent for full fw_ip flows.",
+      "mode": "primary",
+      "model": "llamacpp/nemotron-30b",
+      "prompt": "{file:../agents/NEMOTRON_NOTES.md}\n\n{file:../agents/fw_lead.md}",
+      "steps": 80,
+      "permission": {
+        "bash": {
+          "*": "deny",
+          "ls*": "allow",
+          "pwd": "allow",
+          "cat *": "allow",
+          "head *": "allow",
+          "tail *": "allow",
+          "grep *": "allow",
+          "wc *": "allow",
+          "find *": "allow",
+          "diff *": "allow",
+          "stat *": "allow",
+          "git -C * status*": "allow",
+          "git -C * log*": "allow",
+          "git -C * diff*": "allow",
+          "git -C * show*": "allow",
+          "git -C * ls-files*": "allow",
+          "git status*": "allow",
+          "git log*": "allow",
+          "git diff*": "allow",
+          "git show*": "allow",
+          "git ls-files*": "allow",
+          "*fw_ip/.walkthrough/fw_git.sh *": "allow",
+          "cd *": "allow",
+          "source *": "allow",
+          "*fw-verify *": "allow",
+          "*fw-check-tb *": "allow",
+          "*python -m pytest*": "allow",
+          "curl -s localhost:8080/running*": "allow",
+          "*> /*": "deny",
+          "*> fw_ip*": "deny",
+          "*> ./*": "deny",
+          "*>/*": "deny",
+          "*>>*": "deny",
+          "*<<*": "deny",
+          "*touch *": "deny",
+          "*tee *": "deny",
+          "*sed -i*": "deny",
+          "*cp *": "deny",
+          "*mv *": "deny",
+          "* rm *": "deny",
+          "rm *": "deny",
+          "*mkdir *": "deny",
+          "*python -c*": "deny",
+          "*python3 -c*": "deny",
+          "*python - *": "deny",
+          "*perl *": "deny",
+          "*truncate *": "deny",
+          "*install *": "deny",
+          "*-exec*": "deny",
+          "*agent_runs*": "deny",
+          "*git stash*": "deny",
+          "*git reset*": "deny",
+          "*git checkout*": "deny",
+          "*git restore*": "deny",
+          "*git add*": "deny",
+          "*git commit*": "deny",
+          "*git rm*": "deny"
+        },
+        "edit": {
+          "*": "deny",
+          "*/STATE.md": "allow",
+          "*/nemotron_30b/agents/fw_skills/*": "allow"
+        },
+        "read": {
+          "*": "allow",
+          "*/agent_runs/*": "deny"
+        },
+        "task": {
+          "*": "allow",
+          "general": "deny",
+          "explore": "deny",
+          "build": "deny",
+          "plan": "deny"
+        },
+        "external_directory": "deny"
+      }
+    },
+    "research_manifest": {
+      "description": "Researches HDL implementation patterns and copyright/licensing notes.",
+      "mode": "subagent",
+      "model": "llamacpp/nemotron-30b",
+      "prompt": "{file:../agents/NEMOTRON_NOTES.md}\n\n{file:../agents/subs/research_manifest.md}",
+      "steps": 120
+    },
+    "reuse_planner": {
+      "description": "Plans decomposition, reuse, dependencies, and versioning for requested IP.",
+      "mode": "subagent",
+      "model": "llamacpp/nemotron-30b",
+      "prompt": "{file:../agents/NEMOTRON_NOTES.md}\n\n{file:../agents/subs/reuse_planner.md}",
+      "steps": 120
+    },
+    "design_architect": {
+      "description": "Writes HDL design documents and simulation plans.",
+      "mode": "subagent",
+      "model": "llamacpp/nemotron-30b",
+      "prompt": "{file:../agents/NEMOTRON_NOTES.md}\n\n{file:../agents/subs/design_architect.md}",
+      "steps": 120
+    },
+    "rtl_coder": {
+      "description": "Generates or modifies synthesizable VHDL-2008 RTL.",
+      "mode": "subagent",
+      "model": "llamacpp/nemotron-30b",
+      "prompt": "{file:../agents/NEMOTRON_NOTES.md}\n\n{file:../agents/subs/rtl_coder.md}",
+      "steps": 120
+    },
+    "hdl_reviewer": {
+      "description": "Reviews RTL (target=rtl), testbench (target=tb), twin (target=twin) or spec reference model/checkers/coverage (target=ref) against the fw_skills checklists; writes only its reviews/<target>_worksheet.md and returns JSON findings.",
+      "mode": "subagent",
+      "model": "llamacpp/nemotron-30b",
+      "prompt": "{file:../agents/NEMOTRON_NOTES.md}\n\n{file:../agents/subs/hdl_reviewer.md}",
+      "permission": {
+        "edit": {
+          "*": "deny",
+          "*/reviews/*": "allow"
+        },
+        "read": {
+          "*": "allow",
+          "*/agent_runs/*": "deny"
+        },
+        "bash": {
+          "*": "allow",
+          "*agent_runs*": "deny"
+        }
+      },
+      "steps": 120
+    },
+    "cocotb_tb_architect": {
+      "description": "Builds the bit/cycle-accurate digital twin and the UVM-style testbench (drivers, stimulus, TestbenchManager, tests) on top of the verification architect's reference model.",
+      "mode": "subagent",
+      "model": "llamacpp/nemotron-30b",
+      "prompt": "{file:../agents/NEMOTRON_NOTES.md}\n\n{file:../agents/subs/cocotb_tb_architect.md}",
+      "steps": 300,
+      "permission": {
+        "edit": {
+          "*": "allow",
+          "*_reference/*": "deny",
+          "*/hdl/*": "deny",
+          "*/design_doc/*": "deny",
+          "*/cocotb_testbench_*_shared/*_interface.py": "deny",
+          "*/cocotb_testbench_*_shared/*_coverage.py": "deny",
+          "*/tests/test_reference.py": "deny",
+          "*/fw_py_tools/*": "deny",
+          "*/vhdl_helper/*": "deny",
+          "*/work/tb_checks.py": "deny",
+          "*/work/dut_fault_plugin.py": "deny",
+          "*/hdl_agents/*": "deny",
+          "*/agent_runs/*": "deny",
+          "*/work/ref_checks.py": "deny"
+        },
+        "read": {
+          "*": "allow",
+          "*/agent_runs/*": "deny"
+        },
+        "bash": {
+          "*": "allow",
+          "*agent_runs*": "deny",
+          "*_reference/*": "deny",
+          "*_interface.py*": "deny",
+          "*_coverage.py*": "deny",
+          "*test_reference.py*": "deny",
+          "*/hdl/*": "deny",
+          "*/design_doc/*": "deny",
+          "*fw_py_tools/*": "deny",
+          "*vhdl_helper/*": "deny",
+          "*tb_checks.py*": "deny",
+          "*dut_fault_plugin*": "deny",
+          "*git checkout*": "deny",
+          "*git reset*": "deny",
+          "*git stash*": "deny",
+          "*git restore*": "deny",
+          "*ref_checks.py*": "deny",
+          "*python -m pytest -q tests/test_reference.py*": "allow",
+          "*python -m pytest -q tests/test_on_twin.py*": "allow",
+          "source tools/eda_env.sh && python fw_ip/*/work/tb_checks.py*": "allow",
+          "source */tools/eda_env.sh && python */work/tb_checks.py*": "allow"
+        }
+      }
+    },
+    "sim_runner": {
+      "description": "Runs cocotb tests, creates debug packets, and delegates failures.",
+      "mode": "subagent",
+      "model": "llamacpp/nemotron-30b",
+      "prompt": "{file:../agents/NEMOTRON_NOTES.md}\n\n{file:../agents/subs/sim_runner.md}",
+      "steps": 120
+    },
+    "vivado_ooc": {
+      "description": "Runs or prepares Vivado out-of-context synthesis and report collection.",
+      "mode": "subagent",
+      "model": "llamacpp/nemotron-30b",
+      "prompt": "{file:../agents/NEMOTRON_NOTES.md}\n\n{file:../agents/subs/vivado_ooc.md}",
+      "steps": 120
+    },
+    "openroad_synth": {
+      "description": "Runs or prepares OpenROAD/Yosys synthesis and report collection.",
+      "mode": "subagent",
+      "model": "llamacpp/nemotron-30b",
+      "prompt": "{file:../agents/NEMOTRON_NOTES.md}\n\n{file:../agents/subs/openroad_synth.md}",
+      "steps": 120
+    },
+    "optimizer": {
+      "description": "Creates _s0/_s1/_s2 optimized variants and compares reports.",
+      "mode": "subagent",
+      "model": "llamacpp/nemotron-30b",
+      "prompt": "{file:../agents/NEMOTRON_NOTES.md}\n\n{file:../agents/subs/optimizer.md}",
+      "steps": 120
+    },
+    "artifact_librarian": {
+      "description": "Maintains manifests, lifecycle state, artifact summaries, and learning records.",
+      "mode": "subagent",
+      "model": "llamacpp/nemotron-30b",
+      "prompt": "{file:../agents/NEMOTRON_NOTES.md}\n\n{file:../agents/subs/artifact_librarian.md}",
+      "steps": 120
+    },
+    "DebugLead": {
+      "description": "Primary debug agent for cocotb/VHDL failures.",
+      "mode": "subagent",
+      "model": "llamacpp/nemotron-30b",
+      "prompt": "{file:../agents/NEMOTRON_NOTES.md}\n\n{file:../agents/subs/debug.md}",
+      "steps": 120
+    },
+    "categorizer": {
+      "description": "Classifies cocotb/VHDL failures and routes to the correct debug subagent.",
+      "mode": "subagent",
+      "model": "llamacpp/nemotron-30b",
+      "prompt": "{file:../agents/NEMOTRON_NOTES.md}\n\n{file:../agents/subs/categorizer.md}",
+      "steps": 120
+    },
+    "hdl_syntax": {
+      "description": "Fixes VHDL syntax, analysis, elaboration, and compile-order issues.",
+      "mode": "subagent",
+      "model": "llamacpp/nemotron-30b",
+      "prompt": "{file:../agents/NEMOTRON_NOTES.md}\n\n{file:../agents/subs/hdl_syntax.md}",
+      "steps": 120
+    },
+    "tb_syntax": {
+      "description": "Fixes Python/cocotb syntax, import, setup, and Makefile wiring issues.",
+      "mode": "subagent",
+      "model": "llamacpp/nemotron-30b",
+      "prompt": "{file:../agents/NEMOTRON_NOTES.md}\n\n{file:../agents/subs/tb_syntax.md}",
+      "steps": 120
+    },
+    "logic_sim": {
+      "description": "Debugs DUT/model logic, latency, reset, and signal mismatch failures.",
+      "mode": "subagent",
+      "model": "llamacpp/nemotron-30b",
+      "prompt": "{file:../agents/NEMOTRON_NOTES.md}\n\n{file:../agents/subs/logic_sim.md}",
+      "steps": 120
+    },
+    "verification_architect": {
+      "description": "Writes the spec-level reference model, monitors, checkers, coverage and verification plan from the design doc ONLY (never the HDL or twin), on fw_py_tools.tb.",
+      "mode": "subagent",
+      "model": "llamacpp/nemotron-30b",
+      "prompt": "{file:../agents/NEMOTRON_NOTES.md}\n\n{file:../agents/subs/verification_architect.md}",
+      "permission": {
+        "read": {
+          "*": "allow",
+          "*/hdl/*": "deny",
+          "*_model/*": "deny",
+          "*/work/*": "deny",
+          "*/reviews/*": "deny",
+          "*/testbench/*": "deny",
+          "*/out_of_context_synthesis_vivado/*": "deny",
+          "*/synthesis_OpenROAD/*": "deny",
+          "*/agent_runs/*": "deny",
+          "*/testbench/cocotb_testbench_*_shared/*_interface.py": "allow",
+          "*/testbench/cocotb_testbench_*_shared/*_coverage.py": "allow",
+          "*/testbench/cocotb_testbench_*_shared/tests/test_reference.py": "allow"
+        },
+        "bash": {
+          "*": "allow",
+          "*_model*": "deny",
+          "*load_model*": "deny",
+          "*/hdl/*": "deny",
+          "*/work/*": "deny",
+          "*/reviews/*": "deny",
+          "*agent_runs*": "deny",
+          "*tb_cocotb*": "deny",
+          "*stimulus_generator*": "deny",
+          "*test_main_functionality*": "deny",
+          "*test_edge_cases*": "deny",
+          "*test_error_conditions*": "deny",
+          "*test_twin_lockstep*": "deny",
+          "*tb_checks.py*": "deny",
+          "source tools/eda_env.sh && python fw_ip/*/work/ref_checks.py*": "allow",
+          "source */tools/eda_env.sh && python */work/ref_checks.py*": "allow"
+        },
+        "glob": "deny",
+        "edit": {
+          "*": "allow",
+          "*/hdl/*": "deny",
+          "*/design_doc/preliminary_hdl_design_doc.md": "deny",
+          "*/design_doc/simulation_plan.md": "deny",
+          "*_model/*": "deny",
+          "*/work/*": "deny",
+          "*/fw_py_tools/*": "deny",
+          "*/vhdl_helper/*": "deny",
+          "*/agent_runs/*": "deny",
+          "*/hdl_agents/*": "deny"
+        }
+      },
+      "steps": 200
+    }
+  }
+}
